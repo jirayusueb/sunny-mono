@@ -1,0 +1,350 @@
+# nextjs-elysia-template Project Intelligence
+
+## Project Overview
+
+This is a modern full-stack TypeScript monorepo built with Better-T-Stack, designed as a foundation for web applications. The project uses a clean architecture pattern with separate frontend (Next.js) and backend (Elysia) applications.
+
+## Critical Implementation Paths
+
+### Authentication Flow
+
+1. User submits auth form (sign-in/sign-up)
+2. Frontend sends request to `/api/auth/*` endpoints
+3. Better-Auth processes authentication on server
+4. Session created and stored in SQLite database
+5. Secure cookie set for subsequent requests
+6. Protected routes check session validity
+
+### Database Operations
+
+- Use Drizzle ORM for all database operations
+- Schema-first approach: define schema in `apps/server/src/db/schema/`
+- Generate types with `bun db:generate`
+- Push changes with `bun db:push`
+- Use SQLite for development, scalable for production
+
+### Component Structure
+
+```typescript
+// Standard component pattern
+interface ComponentProps {
+  // Define all props with proper types
+}
+
+export function Component({ prop1, prop2 }: ComponentProps) {
+  // Component implementation
+  return <div>...</div>;
+}
+```
+
+### Server Architecture
+
+The server uses Elysia with a clean plugin-based architecture:
+
+```typescript
+// Main server setup with plugins
+const app = new Elysia()
+  .use(loggerIntegration)
+  .use(openapiIntegration)
+  .use(errorInterceptor)
+  .use(corsMiddleware)
+  .all("/api/auth/*", ({ request, set }) => {
+    if (["POST", "GET"].includes(request.method)) {
+      return auth.handler(request);
+    }
+    set.status = StatusCodes.METHOD_NOT_ALLOWED;
+    return { error: "Method not allowed" };
+  })
+  .use(routers)
+  .listen(Number.parseInt(process.env.PORT || "3001", 10));
+```
+
+### Router Pattern
+
+Routers follow a consistent pattern with proper error handling:
+
+```typescript
+// Health router example
+const healthRouter = new Elysia({ prefix: "/health" }).get("/", ({ set }) => {
+  const startTime = Date.now();
+  const responseTime = Date.now() - startTime;
+
+  set.status = StatusCodes.OK;
+
+  return Response.ok({
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    version: "1.0.0",
+    responseTime,
+    status: "healthy",
+  });
+});
+```
+
+### Container Pattern Implementation
+
+The project uses a sophisticated container pattern for feature organization:
+
+```typescript
+// containers/feature-name/
+├── index.ts                    # Barrel export
+├── feature-name.container.tsx  # Main container
+├── components/                 # Feature-specific components
+│   ├── index.ts
+│   ├── component-a.tsx
+│   └── component-b.tsx
+├── hooks/                      # Feature-specific hooks
+│   ├── index.ts
+│   ├── use-feature-a.ts
+│   └── use-feature-b.ts
+└── utils/                      # Feature-specific utilities
+    ├── index.ts
+    ├── util-a.ts
+    └── util-b.ts
+```
+
+### Form Handling Pattern
+
+The project uses TanStack Form with comprehensive validation:
+
+```typescript
+// Form implementation with validation
+const form = useForm({
+  defaultValues: {
+    email: "",
+    password: "",
+  },
+  onSubmit: async ({ value }) => {
+    await signIn({
+      email: value.email,
+      password: value.password,
+    });
+  },
+  validators: {
+    onSubmit: signInFormSchema,
+  },
+});
+```
+
+### API Client Pattern
+
+The project uses Eden Treaty for type-safe API communication:
+
+```typescript
+// Type-safe API client
+import { client } from "@/lib/client";
+
+// Usage in hooks
+const { data, isLoading, error } = useQuery({
+  queryKey: healthKey.all,
+  queryFn: async () => await client.health.get(),
+  refetchInterval: 30_000,
+  refetchIntervalInBackground: true,
+});
+```
+
+## User Preferences and Workflow
+
+### Code Style
+
+- **TypeScript**: Use interfaces over types, strict mode enabled
+- **Error Handling**: Use Result pattern instead of try-catch blocks
+- **Functional Programming**: Prefer functions over classes
+- **Component Imports**: Use `@/components` alias for all component imports
+- **Package Manager**: Use `bun` for all package operations
+
+### Development Commands
+
+- `bun dev` - Start all apps in development
+- `bun dev:web` - Start only frontend
+- `bun dev:server` - Start only backend
+- `bun db:push` - Push database schema changes
+- `bun db:studio` - Open database studio
+
+### File Organization
+
+- Components in `apps/web/src/components/`
+- Pages in `apps/web/src/app/`
+- API routes in `apps/server/src/routers/`
+- Database schema in `apps/server/src/db/schema/`
+- Utilities in respective `lib/` directories
+
+## Project-Specific Patterns
+
+### Error Handling Pattern
+
+The project implements a comprehensive Result pattern inspired by Rust's Result<T, E>:
+
+```typescript
+// Result type definition
+export type Result<T, E = Error> = Ok<T> | Err<E>;
+
+// Usage with comprehensive methods
+const result = await fetchUser(id);
+if (result.isOk()) {
+  console.log(result.value);
+} else {
+  console.error(result.error);
+}
+
+// Chaining operations
+const processedResult = result
+  .map(user => user.name)
+  .andThen(name => validateName(name))
+  .unwrapOr("Default Name");
+
+// Utility functions
+const safeResult = R.try(() => riskyOperation());
+const asyncResult = await R.tryAsync(async () => await asyncOperation());
+const combinedResult = R.combine([result1, result2, result3]);
+```
+
+### Result Pattern Benefits
+
+- **Type Safety**: Errors are part of the type system
+- **Explicit Error Handling**: Forces developers to handle errors
+- **Composable**: Results can be chained and combined
+- **No Hidden Exceptions**: All error paths are explicit
+- **Performance**: No exception overhead for normal flow
+
+### Component Import Pattern
+
+```typescript
+// Always use @/components alias
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Header } from "@/components/header";
+```
+
+### Database Query Pattern
+
+```typescript
+// Use Drizzle ORM with proper typing
+import { db } from "../db";
+import { user, session } from "../db/schema/auth";
+
+const users = await db.select().from(user).where(eq(user.email, email));
+```
+
+## Known Challenges
+
+### TypeScript Configuration
+
+- Web app has some type configuration issues in `tsconfig.json`
+- Ensure all components have proper TypeScript interfaces
+- Use strict type checking throughout
+
+### Authentication Integration
+
+- Better-Auth requires specific CORS configuration
+- Session cookies need proper security attributes
+- Database schema must match Better-Auth requirements
+
+### Database Schema
+
+- Schema changes require migration generation
+- Use `bun db:generate` before `bun db:push`
+- SQLite file is in `apps/server/local.db`
+
+## Evolution of Project Decisions
+
+### Technology Choices
+
+- **Bun**: Chosen for fast runtime and package management
+- **Elysia**: Selected for high-performance TypeScript backend
+- **Better-Auth**: Modern authentication with good TypeScript support
+- **Drizzle ORM**: Type-safe database operations
+- **shadcn/ui**: Consistent, accessible UI components
+- **TanStack Query**: Server state management with caching
+- **TanStack Form**: Form state management with validation
+- **Eden Treaty**: Type-safe API client generation
+- **Turborepo**: Monorepo build optimization and caching
+
+### Architecture Decisions
+
+- **Monorepo**: Turborepo for build optimization
+- **Type Safety**: End-to-end TypeScript implementation
+- **Result Pattern**: Consistent error handling approach
+- **Functional Components**: React functional components with hooks
+- **Container Pattern**: Feature-based organization with clear boundaries
+- **Plugin Architecture**: Modular server components
+- **Barrel Exports**: Clean import organization
+
+## Current Project State
+
+### Implemented Features
+
+- **Authentication System**: Complete sign-in/sign-up flow with Better-Auth
+- **Health Check System**: Real-time system monitoring with TanStack Query
+- **Container Pattern**: Feature-based organization (home, login containers)
+- **Form Handling**: TanStack Form with validation schemas
+- **API Integration**: Type-safe client with Eden Treaty
+- **Database Schema**: Drizzle ORM with SQLite for development
+- **UI Components**: Complete shadcn/ui component library
+- **Error Handling**: Comprehensive Result pattern implementation
+- **Development Tooling**: Biome, Ultracite, Turborepo configuration
+
+### Key Components
+
+- **HomeContainer**: System status dashboard with health monitoring
+- **LoginContainer**: Authentication flow with form switching
+- **HealthRouter**: Backend health check endpoint
+- **Result Pattern**: Full implementation with Ok/Err classes and utilities
+
+### Development Workflow
+
+- **Hot Reloading**: Both frontend and backend support hot reloading
+- **Type Safety**: End-to-end TypeScript with strict mode
+- **Code Quality**: Automated linting and formatting with Biome
+- **Database Management**: Drizzle Studio for database inspection
+- **API Documentation**: OpenAPI integration for API docs
+
+## Tool Usage Patterns
+
+### Development Tools
+
+- **Biome**: Fast linting and formatting
+- **Ultracite**: Code quality enforcement
+- **Turborepo**: Build caching and parallel execution
+- **Drizzle Studio**: Database visualization
+- **Eden Treaty**: Type-safe API client generation
+- **TanStack DevTools**: Query and form debugging
+
+## Critical Rules
+
+### Must Follow
+
+1. Use Result pattern for error handling (no try-catch)
+2. Use `@/components` alias for all component imports
+3. Use `bun` package manager for all operations
+4. Maintain TypeScript strict mode compliance
+5. Follow Ultracite code quality standards
+6. Use TanStack Query for server state management
+7. Use TanStack Form for form state management
+8. Use Eden Treaty for type-safe API communication
+9. Follow container pattern for feature organization
+10. Use barrel exports for clean imports
+
+### Must Avoid
+
+1. Don't use try-catch blocks for error handling
+2. Don't use relative imports for components
+3. Don't use npm or yarn (use bun)
+4. Don't ignore TypeScript errors
+5. Don't bypass code quality checks
+6. Don't use useState for server state (use TanStack Query)
+7. Don't use uncontrolled forms (use TanStack Form)
+8. Don't bypass Result pattern for expected errors
+9. Don't create components outside the container pattern
+10. Don't ignore barrel export patterns
+
+### Development Patterns
+
+1. **Container First**: Always start with container components
+2. **Hook Composition**: Compose hooks for complex logic
+3. **Type Safety**: Use strict TypeScript throughout
+4. **Error Boundaries**: Implement proper error handling
+5. **Performance**: Use React.memo and useMemo appropriately
+6. **Accessibility**: Follow WCAG guidelines with shadcn/ui
+7. **Testing**: Write tests for all business logic
+8. **Documentation**: Keep patterns documented and updated

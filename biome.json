@@ -1,0 +1,72 @@
+{
+	"$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+	"assist": {
+		"actions": {
+			"source": {
+				"organizeImports": {
+					"level": "on",
+					"options": {
+						"groups": [
+							[":BUN:", ":NODE:"],
+							[":PACKAGE:"],
+							":BLANK_LINE:",
+							["@/components*"],
+							":BLANK_LINE:",
+							["@/*"],
+							":BLANK_LINE:",
+							["./**"]
+						]
+					}
+				}
+			}
+		}
+	},
+	"files": {
+		"ignoreUnknown": false,
+		"includes": [
+			"apps/**/*.{ts,tsx,json,mjs}",
+			"packages/**/*.{ts,tsx,json}",
+			"*.{ts,tsx,json,jsonc,mjs}",
+			"*.config.{ts,mjs,js}",
+			"docs/**/*.md",
+			"!**/node_modules/**",
+			"!**/.next/**",
+			"!**/dist/**",
+			"!**/.turbo/**",
+			"!**/dev-dist/**",
+			"!**/.zed/**",
+			"!**/.vscode/**",
+			"!**/routeTree.gen.ts",
+			"!**/src-tauri/**",
+			"!**/.nuxt/**",
+			"!bts.jsonc",
+			"!**/.expo/**",
+			"!**/.wrangler/**",
+			"!**/.alchemy/**",
+			"!**/wrangler.jsonc",
+			"!**/.source/**",
+			"!**/src/components/ui/**",
+			"!**/*.d.ts",
+			"!**/tsconfig.tsbuildinfo",
+			"!**/migrations/**"
+		]
+	},
+	"extends": ["ultracite/next"],
+	"linter": {
+		"rules": {
+			"performance": {
+				"noNamespaceImport": "off",
+				"noBarrelFile": "off"
+			},
+			"nursery": {
+				"noShadow": "off"
+			},
+			"suspicious": {
+				"noConsole": "off"
+			},
+			"style": {
+				"noMagicNumbers": "off"
+			}
+		}
+	}
+}

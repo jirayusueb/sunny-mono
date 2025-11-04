@@ -1,0 +1,690 @@
+---
+description: Result pattern implementation and usage guidelines for error handling without exceptions
+globs: ["**/*.ts", "**/*.tsx"]
+alwaysApply: true
+---
+
+# Result Pattern Implementation
+
+This project uses a Result pattern inspired by Rust's `Result<T, E>` for robust error handling without throwing exceptions. This approach provides type-safe error handling and makes error states explicit in the type system.
+
+## Core Concepts
+
+### Result Type
+
+```typescript
+type Result<T, E = Error> = Ok<T> | Err<E>;
+```
+
+A Result represents either:
+
+- **Ok(value)**: A successful operation containing a value of type `T`
+- **Err(error)**: A failed operation containing an error of type `E`
+
+## Basic Usage
+
+### Creating Results
+
+```typescript
+import { ok, err, R } from "@/utils/result";
+
+// Success cases
+const success = ok("Hello World");
+const successWithData = ok({ id: 1, name: "John" });
+
+// Error cases
+const failure = err(new Error("Something went wrong"));
+const customError = err("Custom error message");
+```
+
+### Checking Results
+
+```typescript
+const result = someOperation();
+
+if (result.isOk()) {
+  // TypeScript knows this is Ok<T>
+  console.log("Success:", result.value);
+} else {
+  // TypeScript knows this is Err<E>
+  console.error("Error:", result.error);
+}
+```
+
+### Unwrapping Values
+
+```typescript
+// Safe unwrapping with defaults
+const value = result.unwrapOr("default value");
+const computed = result.unwrapOrElse(() => "computed default");
+
+// Unsafe unwrapping (throws if Err)
+const value = result.unwrap(); // ⚠️ Use with caution
+const value = result.expect("Expected a value"); // ⚠️ Use with custom message
+```
+
+## Advanced Operations
+
+### Mapping and Transformation
+
+```typescript
+// Transform successful values
+const mapped = result.map((value) => value.toUpperCase());
+
+// Transform errors
+const mappedError = result.mapErr((error) => new CustomError(error.message));
+
+// Chain operations
+const chained = result
+  .andThen((value) => validateValue(value))
+  .map((validValue) => processValue(validValue));
+```
+
+### Combining Results
+
+```typescript
+// Combine multiple results
+const results = [result1, result2, result3];
+const combined = R.combine(results); // Ok if all succeed, Err if any fail
+
+// Partition results into successes and failures
+const { ok: successes, err: failures } = R.partition(results);
+```
+
+### Utility Functions
+
+```typescript
+// Wrap functions that might throw
+const safeResult = R.try(() => riskyOperation());
+const asyncResult = await R.tryAsync(async () => await asyncOperation());
+
+// Handle nullable values
+const result = R.fromNullable(maybeNull, "Value was null");
+
+// Validate with predicates
+const result = R.fromPredicate(
+  value,
+  (val) => val > 0,
+  (val) => `Value ${val} must be positive`
+);
+```
+
+## Best Practices
+
+### 1. Always Use Result Pattern for Error Handling
+
+```typescript
+// ✅ Good: Use Result pattern
+function fetchUser(id: string): Result<User, Error> {
+  if (!id) {
+    return err(new Error("ID is required"));
+  }
+
+  const user = database.findUser(id);
+  if (!user) {
+    return err(new Error("User not found"));
+  }
+
+  return ok(user);
+}
+
+// ❌ Bad: Throwing exceptions
+function fetchUser(id: string): User {
+  if (!id) {
+    throw new Error("ID is required");
+  }
+
+  const user = database.findUser(id);
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  return user;
+}
+```
+
+### 2. Chain Operations with andThen
+
+```typescript
+// ✅ Good: Chain operations
+function processUser(id: string): Result<ProcessedUser, Error> {
+  return fetchUser(id)
+    .andThen((user) => validateUser(user))
+    .andThen((validUser) => enrichUser(validUser))
+    .map((enrichedUser) => processUserData(enrichedUser));
+}
+```
+
+### 3. Use Type Guards for Type Safety
+
+```typescript
+// ✅ Good: Use type guards
+if (isOk(result)) {
+  // TypeScript knows this is Ok<T>
+  console.log(result.value);
+} else {
+  // TypeScript knows this is Err<E>
+  console.error(result.error);
+}
+```
+
+### 4. Handle Errors Explicitly
+
+```typescript
+// ✅ Good: Explicit error handling
+const result = fetchUser(id);
+if (result.isErr()) {
+  logger.error("Failed to fetch user:", result.error);
+  return { success: false, error: result.error.message };
+}
+
+const user = result.value;
+// Continue with user...
+```
+
+### 5. Use R.try for Legacy Code
+
+```typescript
+// ✅ Good: Wrap legacy functions
+function legacyFunction(): Result<string, Error> {
+  return R.try(() => {
+    // Legacy code that might throw
+    return someRiskyOperation();
+  });
+}
+```
+
+## Code Readability Practices
+
+### 1. Use Descriptive Variable Names
+
+```typescript
+// ✅ Good: Clear, descriptive names
+const userFetchResult = await fetchUser(userId);
+const validationResult = validateUserData(userData);
+const databaseSaveResult = await saveUserToDatabase(user);
+
+// ❌ Bad: Unclear abbreviations
+const res = await fetchUser(id);
+const val = validateUserData(data);
+const dbRes = await saveUserToDatabase(u);
+```
+
+### 2. Extract Complex Logic into Named Functions
+
+```typescript
+// ✅ Good: Extract complex operations
+function processUserRegistration(
+  data: UserRegistrationData
+): Result<User, ValidationError> {
+  return validateRegistrationData(data)
+    .andThen((validData) => checkEmailAvailability(validData.email))
+    .andThen((availableData) => hashPassword(availableData))
+    .andThen((hashedData) => createUserRecord(hashedData));
+}
+
+// ❌ Bad: Inline complex logic
+function processUserRegistration(
+  data: UserRegistrationData
+): Result<User, ValidationError> {
+  return validateRegistrationData(data)
+    .andThen((validData) => {
+      // Complex email checking logic inline
+      return checkEmailInDatabase(validData.email).andThen((isAvailable) => {
+        if (!isAvailable) {
+          return err(new ValidationError("Email already exists"));
+        }
+        return ok(validData);
+      });
+    })
+    .andThen((availableData) => {
+      // Complex password hashing inline
+      return hashPasswordWithSalt(availableData.password).map(
+        (hashedPassword) => ({
+          ...availableData,
+          password: hashedPassword,
+        })
+      );
+    });
+}
+```
+
+### 3. Use Early Returns for Error Cases
+
+```typescript
+// ✅ Good: Early returns for clarity
+function processPayment(
+  paymentData: PaymentData
+): Result<Payment, PaymentError> {
+  const validationResult = validatePaymentData(paymentData);
+  if (validationResult.isErr()) {
+    return validationResult;
+  }
+
+  const userResult = fetchUser(paymentData.userId);
+  if (userResult.isErr()) {
+    return err(new PaymentError("User not found", userResult.error));
+  }
+
+  const processedPayment = processPaymentWithGateway(validationResult.value);
+  return processedPayment;
+}
+
+// ❌ Bad: Nested conditions
+function processPayment(
+  paymentData: PaymentData
+): Result<Payment, PaymentError> {
+  const validationResult = validatePaymentData(paymentData);
+  if (validationResult.isOk()) {
+    const userResult = fetchUser(paymentData.userId);
+    if (userResult.isOk()) {
+      const processedPayment = processPaymentWithGateway(
+        validationResult.value
+      );
+      return processedPayment;
+    } else {
+      return err(new PaymentError("User not found", userResult.error));
+    }
+  } else {
+    return validationResult;
+  }
+}
+```
+
+### 4. Use Meaningful Error Messages
+
+```typescript
+// ✅ Good: Descriptive error messages
+function validateEmail(email: string): Result<string, ValidationError> {
+  if (!email) {
+    return err(new ValidationError("Email address is required"));
+  }
+
+  if (!email.includes("@")) {
+    return err(new ValidationError("Email address must contain @ symbol"));
+  }
+
+  if (!email.includes(".")) {
+    return err(new ValidationError("Email address must contain a domain"));
+  }
+
+  return ok(email);
+}
+
+// ❌ Bad: Generic error messages
+function validateEmail(email: string): Result<string, ValidationError> {
+  if (!email || !email.includes("@") || !email.includes(".")) {
+    return err(new ValidationError("Invalid email"));
+  }
+
+  return ok(email);
+}
+```
+
+### 5. Group Related Operations
+
+```typescript
+// ✅ Good: Group related operations
+class UserService {
+  // User CRUD operations
+  async createUser(
+    data: CreateUserData
+  ): Promise<Result<User, ValidationError>> {
+    return validateUserData(data).andThen((validData) =>
+      this.database.createUser(validData)
+    );
+  }
+
+  async getUser(id: string): Promise<Result<User, NotFoundError>> {
+    return this.database
+      .findUser(id)
+      .andThen((user) =>
+        user ? ok(user) : err(new NotFoundError(`User ${id} not found`))
+      );
+  }
+
+  // User authentication operations
+  async authenticateUser(
+    credentials: LoginCredentials
+  ): Promise<Result<AuthToken, AuthError>> {
+    return this.validateCredentials(credentials).andThen((user) =>
+      this.generateAuthToken(user)
+    );
+  }
+
+  async refreshToken(token: string): Promise<Result<AuthToken, AuthError>> {
+    return this.validateRefreshToken(token).andThen((user) =>
+      this.generateAuthToken(user)
+    );
+  }
+}
+```
+
+### 6. Use Consistent Naming Conventions
+
+```typescript
+// ✅ Good: Consistent naming
+function fetchUserById(id: string): Promise<Result<User, DatabaseError>> {}
+function fetchUserByEmail(
+  email: string
+): Promise<Result<User, DatabaseError>> {}
+function createUserWithData(
+  data: UserData
+): Promise<Result<User, ValidationError>> {}
+function updateUserWithId(
+  id: string,
+  data: UserData
+): Promise<Result<User, DatabaseError>> {}
+
+// ❌ Bad: Inconsistent naming
+function getUser(id: string): Promise<Result<User, DatabaseError>> {}
+function fetchUserByEmail(
+  email: string
+): Promise<Result<User, DatabaseError>> {}
+function create(data: UserData): Promise<Result<User, ValidationError>> {}
+function updateUser(
+  id: string,
+  data: UserData
+): Promise<Result<User, DatabaseError>> {}
+```
+
+### 7. Add JSDoc Comments for Complex Functions
+
+````typescript
+// ✅ Good: Document complex functions
+/**
+ * Processes a user registration with validation, email verification, and account creation
+ *
+ * @param data - User registration data including email, password, and profile info
+ * @returns Result containing the created user or validation/creation error
+ *
+ * @example
+ * ```typescript
+ * const result = await processUserRegistration({
+ *   email: "user@example.com",
+ *   password: "securePassword123",
+ *   profile: { name: "John Doe" }
+ * });
+ *
+ * if (result.isOk()) {
+ *   console.log("User created:", result.value);
+ * } else {
+ *   console.error("Registration failed:", result.error);
+ * }
+ * ```
+ */
+async function processUserRegistration(
+  data: UserRegistrationData
+): Promise<Result<User, RegistrationError>> {
+  return validateRegistrationData(data)
+    .andThen((validData) => verifyEmailAvailability(validData))
+    .andThen((verifiedData) => createUserAccount(verifiedData));
+}
+````
+
+### 8. Use Type Aliases for Complex Result Types
+
+```typescript
+// ✅ Good: Use type aliases for clarity
+type UserCreationResult = Result<User, ValidationError | DatabaseError>;
+type PaymentProcessingResult = Result<Payment, PaymentError | GatewayError>;
+type AuthenticationResult = Result<AuthToken, AuthError | ValidationError>;
+
+function createUser(data: UserData): Promise<UserCreationResult> {
+  return validateUserData(data).andThen((validData) =>
+    saveUserToDatabase(validData)
+  );
+}
+
+// ❌ Bad: Complex inline types
+function createUser(
+  data: UserData
+): Promise<Result<User, ValidationError | DatabaseError>> {
+  return validateUserData(data).andThen((validData) =>
+    saveUserToDatabase(validData)
+  );
+}
+```
+
+### 9. Handle Results at the Right Level
+
+```typescript
+// ✅ Good: Handle results at appropriate levels
+class UserController {
+  async createUser(req: Request, res: Response): Promise<void> {
+    const userData = req.body as UserData;
+
+    const result = await this.userService.createUser(userData);
+
+    if (result.isOk()) {
+      res.status(201).json({ user: result.value });
+    } else {
+      res.status(400).json({ error: result.error.message });
+    }
+  }
+}
+
+class UserService {
+  async createUser(data: UserData): Promise<Result<User, ValidationError>> {
+    // Service layer handles business logic, returns Result
+    return validateUserData(data).andThen((validData) =>
+      this.database.createUser(validData)
+    );
+  }
+}
+
+// ❌ Bad: Handling results at wrong levels
+class UserController {
+  async createUser(req: Request, res: Response): Promise<void> {
+    const userData = req.body as UserData;
+
+    // Controller shouldn't handle validation logic
+    if (!userData.email) {
+      res.status(400).json({ error: "Email required" });
+      return;
+    }
+
+    const user = await this.userService.createUser(userData);
+    res.status(201).json({ user });
+  }
+}
+```
+
+### 10. Use Result Pattern Consistently
+
+```typescript
+// ✅ Good: Consistent Result usage throughout
+class ApiService {
+  async fetchData<T>(url: string): Promise<Result<T, NetworkError>> {
+    return R.tryAsync(async () => {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      return response.json() as T;
+    }).mapErr((error) => new NetworkError("Failed to fetch data", error));
+  }
+
+  async postData<T>(
+    url: string,
+    data: unknown
+  ): Promise<Result<T, NetworkError>> {
+    return R.tryAsync(async () => {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      return response.json() as T;
+    }).mapErr((error) => new NetworkError("Failed to post data", error));
+  }
+}
+
+// ❌ Bad: Mixed error handling approaches
+class ApiService {
+  async fetchData<T>(url: string): Promise<T> {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      return response.json() as T;
+    } catch (error) {
+      throw error; // Throwing exceptions
+    }
+  }
+
+  async postData<T>(
+    url: string,
+    data: unknown
+  ): Promise<Result<T, NetworkError>> {
+    return R.tryAsync(async () => {
+      // Result pattern here
+      const response = await fetch(url, {
+        /* ... */
+      });
+      return response.json() as T;
+    });
+  }
+}
+```
+
+## Common Patterns
+
+### Service Layer Pattern
+
+```typescript
+class UserService {
+  async createUser(
+    data: CreateUserData
+  ): Promise<Result<User, ValidationError>> {
+    const validation = validateUserData(data);
+    if (validation.isErr()) {
+      return validation;
+    }
+
+    const user = await this.database.createUser(validation.value);
+    return ok(user);
+  }
+
+  async getUser(id: string): Promise<Result<User, NotFoundError>> {
+    const user = await this.database.findUser(id);
+    return user ? ok(user) : err(new NotFoundError(`User ${id} not found`));
+  }
+}
+```
+
+### API Response Pattern
+
+```typescript
+function handleApiRequest(req: Request): Result<ApiResponse, ApiError> {
+  return parseRequest(req)
+    .andThen((validReq) => validateRequest(validReq))
+    .andThen((validatedReq) => processRequest(validatedReq))
+    .map((processed) => createResponse(processed));
+}
+```
+
+### Database Operation Pattern
+
+```typescript
+async function saveEntity<T>(entity: T): Promise<Result<T, DatabaseError>> {
+  return R.tryAsync(async () => {
+    const saved = await database.save(entity);
+    return saved;
+  }).mapErr((error) => new DatabaseError("Failed to save entity", error));
+}
+```
+
+## Error Types
+
+Define specific error types for better error handling:
+
+```typescript
+class ValidationError extends Error {
+  constructor(message: string, public field: string) {
+    super(message);
+    this.name = "ValidationError";
+  }
+}
+
+class NotFoundError extends Error {
+  constructor(resource: string) {
+    super(`${resource} not found`);
+    this.name = "NotFoundError";
+  }
+}
+
+class DatabaseError extends Error {
+  constructor(message: string, public originalError?: Error) {
+    super(message);
+    this.name = "DatabaseError";
+  }
+}
+```
+
+## Integration with React
+
+```typescript
+function useUser(id: string) {
+  const [result, setResult] = useState<Result<User, Error> | null>(null);
+
+  useEffect(() => {
+    fetchUser(id).then(setResult);
+  }, [id]);
+
+  return {
+    user: result?.isOk() ? result.value : null,
+    error: result?.isErr() ? result.error : null,
+    isLoading: result === null,
+  };
+}
+```
+
+## Testing
+
+```typescript
+describe("UserService", () => {
+  it("should return user when found", async () => {
+    const result = await userService.getUser("123");
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.id).toBe("123");
+    }
+  });
+
+  it("should return error when user not found", async () => {
+    const result = await userService.getUser("nonexistent");
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toBeInstanceOf(NotFoundError);
+    }
+  });
+});
+```
+
+## Migration Guide
+
+When migrating from try-catch to Result pattern:
+
+1. **Replace throw statements** with `err()` returns
+2. **Replace try-catch blocks** with Result checks
+3. **Update function signatures** to return `Result<T, E>`
+4. **Use R.try()** for legacy code that throws
+5. **Update callers** to handle Results instead of catching exceptions
+
+## Benefits
+
+- **Type Safety**: Errors are part of the type system
+- **Explicit Error Handling**: Forces developers to handle errors
+- **Composable**: Results can be chained and combined
+- **No Hidden Exceptions**: All error paths are explicit
+- **Better Testing**: Error cases are easier to test
+- **Performance**: No exception overhead for normal flow
+
+Remember: The Result pattern is about making error handling explicit and type-safe. Always prefer Results over exceptions for expected error conditions.

@@ -1,0 +1,20 @@
+{
+	"extends": "@workspace/ts-config/nextjs.json",
+	"compilerOptions": {
+		"paths": {
+			"@/*": ["./src/*"],
+			"@workspace/server": ["../server/src/*"],
+			"@workspace/shared": ["../packages/shared/src/*"]
+		}
+	},
+	"include": [
+		"./src/**/*.ts",
+		"./src/**/*.tsx",
+		"./.next/types/**/*.ts",
+		"./next-env.d.ts",
+		".next/types/**/*.ts",
+		".next/dev/types/**/*.ts",
+		"vitest.config.mts"
+	],
+	"exclude": ["./node_modules", "../server"]
+}

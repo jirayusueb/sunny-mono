@@ -1,0 +1,764 @@
+---
+description: Elysia.js patterns and best practices for this project
+globs: ["apps/server/**/*.ts"]
+alwaysApply: true
+---
+
+# Elysia.js Patterns and Best Practices
+
+This project uses Elysia.js as the backend framework with specific patterns for type safety, error handling, and maintainability.
+
+## Core Architecture Patterns
+
+### Application Structure
+
+```typescript
+// Main application setup with current project structure
+const app = new Elysia()
+  .use(loggerIntegration)      // Logging integration
+  .use(openapiIntegration)     // API documentation
+  .use(errorInterceptor)       // Global error handling
+  .use(corsMiddleware)         // CORS configuration
+  .all("/api/auth/*", ({ request, set }) => {
+    if (["POST", "GET"].includes(request.method)) {
+      return auth.handler(request);
+    }
+    set.status = StatusCodes.METHOD_NOT_ALLOWED;
+    return { error: "Method not allowed" };
+  })
+  .use(routers)               // All API routes
+  .listen(Number.parseInt(process.env.PORT || "3001", 10));
+
+export type App = typeof app;
+export type Routers = typeof routers;
+```
+
+### Router Organization
+
+```typescript
+// Router structure with prefix and plugins
+export const chatRouter = new Elysia({ prefix: "/api/chat" })
+  .use(databasePlugin)
+  .use(authPlugin)
+  .post("/", handler, {
+    body: RequestSchema,
+    auth: true,
+    response: {
+      200: ResponseSchema,
+      400: ErrorSchema,
+      500: ErrorSchema,
+    },
+  });
+```
+
+## Plugin Patterns
+
+### Authentication Plugin
+
+```typescript
+export const authPlugin = new Elysia({ name: "auth" }).macro({
+  auth: {
+    async resolve({ status, request: { headers } }) {
+      const session = await auth.api.getSession({ headers });
+
+      if (!session) {
+        return status(401);
+      }
+
+      return {
+        user: session.user,
+        session: session.session,
+      };
+    },
+  },
+});
+```
+
+### Database Plugin
+
+```typescript
+export const databasePlugin = new Elysia({ name: "database" }).decorate(
+  "db",
+  db
+);
+```
+
+### CORS Plugin
+
+```typescript
+export const corsPlugin = new Elysia({ name: "cors" }).use(
+  cors({
+    origin: process.env.CORS_ORIGIN || "",
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
+  })
+);
+```
+
+## Route Handler Patterns
+
+### Standard CRUD Operations
+
+```typescript
+// GET endpoint with authentication
+.get(
+  "/conversations/:id",
+  async ({ params, db, user }) => {
+    const service = new ChatService(db);
+    const result = await service.getConversationHistory(params.id, user.id);
+    return resultToApiResponse(result);
+  },
+  {
+    auth: true,
+    response: {
+      200: ConversationSchema,
+      404: ErrorSchema,
+      500: ErrorSchema,
+    },
+  }
+)
+
+// POST endpoint with validation
+.post(
+  "/",
+  async ({ body, db, user }) => {
+    const service = new ChatService(db);
+    const result = await service.processChatRequest(body, user.id);
+
+    if (!result.success) {
+      return {
+        success: false,
+        error: result.error?.message || "Failed to process request",
+      };
+    }
+
+    return result.value;
+  },
+  {
+    body: RequestSchema,
+    auth: true,
+    response: {
+      200: ResponseSchema,
+      400: ErrorSchema,
+      500: ErrorSchema,
+    },
+  }
+)
+
+// DELETE endpoint
+.delete(
+  "/conversations/:id",
+  async ({ params, db, user }) => {
+    const service = new ChatService(db);
+    const result = await service.deleteConversation(params.id, user.id);
+    return resultToApiResponse(result);
+  },
+  {
+    auth: true,
+    response: {
+      200: SuccessSchema,
+      404: ErrorSchema,
+      500: ErrorSchema,
+    },
+  }
+)
+```
+
+### Health Check Pattern
+
+```typescript
+// Current project health router implementation
+const healthRouter = new Elysia({ prefix: "/health" }).get("/", ({ set }) => {
+  const startTime = Date.now();
+  const responseTime = Date.now() - startTime;
+
+  set.status = StatusCodes.OK;
+
+  return Response.ok({
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    version: "1.0.0",
+    responseTime,
+    status: "healthy",
+  });
+});
+
+export default healthRouter;
+```
+
+## Schema Validation Patterns
+
+### Request/Response Schemas
+
+```typescript
+// Request schema
+const ChatRequestSchema = z.object({
+  message: z.string().min(1),
+  conversationId: z.string().optional(),
+  model: z.string().optional(),
+});
+
+// Response schema
+const ChatResponseSchema = z.object({
+  success: z.boolean(),
+  data: z.unknown().optional(),
+  error: z.string().optional(),
+});
+
+// Health check schema
+const HealthResponseSchema = z.object({
+  success: z.boolean(),
+  data: z.object({
+    timestamp: z.string(),
+    uptime: z.number(),
+    version: z.string(),
+    responseTime: z.number(),
+    status: z.enum(["healthy", "degraded", "unhealthy"]),
+    services: z.object({
+      database: z.enum(["up", "down"]),
+      memory: z.enum(["ok", "warning", "critical"]),
+    }),
+  }),
+  error: z.string().optional(),
+});
+```
+
+## Error Handling Patterns
+
+### Result Pattern Integration
+
+The project uses a comprehensive Result pattern for type-safe error handling:
+
+```typescript
+// Use Result pattern for error handling
+.post(
+  "/",
+  async ({ body, db, user }) => {
+    const service = new ChatService(db);
+    const result = await service.processChatRequest(body, user.id);
+
+    // Convert Result to API response
+    return resultToApiResponse(result);
+  },
+  {
+    body: RequestSchema,
+    auth: true,
+    response: {
+      200: ResponseSchema,
+      400: ErrorSchema,
+      500: ErrorSchema,
+    },
+  }
+)
+
+// Result pattern usage examples
+const result = await fetchUser(id);
+if (result.isOk()) {
+  console.log(result.value);
+} else {
+  console.error(result.error);
+}
+
+// Chaining operations
+const processedResult = result
+  .map(user => user.name)
+  .andThen(name => validateName(name))
+  .unwrapOr("Default Name");
+```
+
+### Error Response Helpers
+
+```typescript
+// Use standardized error responses
+import {
+  sendErrorResponse,
+  sendNotFoundResponse,
+  sendUnauthorizedResponse,
+  sendValidationErrorResponse,
+} from "@/utils/api-response";
+
+// In route handlers
+if (!user) {
+  return sendUnauthorizedResponse(set);
+}
+
+if (!resource) {
+  return sendNotFoundResponse("Resource", set);
+}
+
+if (validationErrors.length > 0) {
+  return sendValidationErrorResponse(validationErrors, set);
+}
+```
+
+## Router Registration Pattern
+
+### Centralized Router Management
+
+```typescript
+// routers/index.ts - Current project implementation
+import healthRouter from "./health/health.router";
+
+export const routers = new Elysia()
+  .use(healthRouter);
+
+// Individual router exports
+export { default as healthRouter } from "./health/health.router";
+```
+
+### Router Configuration
+
+```typescript
+export const ROUTER_CONFIG = {
+  health: {
+    prefix: "/health",
+    description: "Health check and system status endpoints",
+  },
+  chat: {
+    prefix: "/api/chat",
+    description: "Chat and conversation management endpoints",
+    version: "1.0.0",
+  },
+  knowledgeBase: {
+    prefix: "/api/knowledge-base",
+    description: "Knowledge base management endpoints",
+    version: "2.0.0",
+  },
+} as const;
+```
+
+## Service Integration Patterns
+
+### Service Layer Integration
+
+```typescript
+// Inject services through context
+.post(
+  "/",
+  async ({ body, db, user }) => {
+    const service = new ChatService(db);
+    const result = await service.processRequest(body, user.id);
+    return resultToApiResponse(result);
+  }
+)
+```
+
+### Database Integration
+
+```typescript
+// Use database plugin for consistent access
+.get(
+  "/data",
+  async ({ db, query }) => {
+    const data = await db.select().from(table).where(condition);
+    return { success: true, data };
+  }
+)
+```
+
+## Streaming Response Patterns
+
+### Server-Sent Events
+
+```typescript
+.post(
+  "/stream",
+  async ({ body, db, user }) => {
+    const service = new ChatService(db);
+    const result = await service.processStreamingRequest(body, user.id);
+
+    if (!result.success) {
+      return {
+        success: false,
+        error: result.error?.message || "Failed to process request",
+      };
+    }
+
+    // Return Response directly for streaming
+    return result.value;
+  },
+  {
+    body: RequestSchema,
+    auth: true,
+    response: {
+      200: ResponseSchema,
+      400: ErrorSchema,
+      500: ErrorSchema,
+    },
+  }
+)
+```
+
+## Type Safety Patterns
+
+### Type Exports
+
+```typescript
+// Export app type for frontend
+export type App = typeof app;
+
+// Export router types
+export type ChatRouter = typeof chatRouter;
+export type HealthRouter = typeof healthRouter;
+```
+
+### Context Type Safety
+
+```typescript
+// Use proper typing for context
+.post(
+  "/",
+  async ({ body, db, user }: {
+    body: ChatRequest;
+    db: Database;
+    user: User;
+  }) => {
+    // Type-safe access to context
+  }
+)
+```
+
+## Best Practices
+
+### 1. Always Use Plugins for Cross-Cutting Concerns
+
+```typescript
+// ✅ Good: Use plugins for reusable functionality
+export const authPlugin = new Elysia({ name: "auth" }).macro({...});
+
+// ❌ Bad: Duplicate auth logic in every route
+```
+
+### 2. Use Result Pattern for Error Handling
+
+```typescript
+// ✅ Good: Use Result pattern
+const result = await service.processRequest(data);
+return resultToApiResponse(result);
+
+// ❌ Bad: Use try-catch blocks
+try {
+  const data = await service.processRequest(data);
+  return { success: true, data };
+} catch (error) {
+  return { success: false, error: error.message };
+}
+```
+
+### 3. Define Response Schemas
+
+```typescript
+// ✅ Good: Define response schemas
+{
+  response: {
+    200: ResponseSchema,
+    400: ErrorSchema,
+    500: ErrorSchema,
+  },
+}
+
+// ❌ Bad: No response validation
+```
+
+### 4. Use Descriptive Route Names
+
+```typescript
+// ✅ Good: Clear, descriptive routes
+.get("/conversations/:id", handler)
+.patch("/conversations/:id/archive", handler)
+
+// ❌ Bad: Unclear routes
+.get("/conv/:id", handler)
+.patch("/conv/:id/arch", handler)
+```
+
+### 5. Centralize Router Registration
+
+```typescript
+// ✅ Good: Centralized registration
+export function registerRouters(app: Elysia) {
+  return app.use(healthRouter).use(chatRouter);
+}
+
+// ❌ Bad: Scattered router imports
+app.use(healthRouter);
+app.use(chatRouter);
+```
+
+### 6. Use Environment Variables for Configuration
+
+```typescript
+// ✅ Good: Environment-based configuration
+const corsPlugin = new Elysia({ name: "cors" }).use(
+  cors({
+    origin: process.env.CORS_ORIGIN || "",
+    methods: ["GET", "POST", "OPTIONS"],
+  })
+);
+
+// ❌ Bad: Hardcoded values
+const corsPlugin = new Elysia({ name: "cors" }).use(
+  cors({
+    origin: "http://localhost:3000",
+    methods: ["GET", "POST", "OPTIONS"],
+  })
+);
+```
+
+### 7. Handle Errors Gracefully
+
+```typescript
+// ✅ Good: Graceful error handling
+.onError(({ error }) => {
+  console.error(error);
+  return {
+    success: false,
+    error: "Internal server error",
+  };
+})
+
+// ❌ Bad: Let errors crash the app
+```
+
+### 8. Use Type-Safe Context
+
+```typescript
+// ✅ Good: Type-safe context access
+.post(
+  "/",
+  async ({ body, db, user }: {
+    body: RequestType;
+    db: Database;
+    user: User;
+  }) => {
+    // Type-safe access
+  }
+)
+
+// ❌ Bad: Any type context
+.post("/", async ({ body, db, user }: any) => {
+  // No type safety
+})
+```
+
+## Common Anti-Patterns to Avoid
+
+### 1. Don't Use Try-Catch for Expected Errors
+
+```typescript
+// ❌ Bad: Using try-catch for business logic
+try {
+  const user = await findUser(id);
+  if (!user) {
+    throw new Error("User not found");
+  }
+  return { success: true, data: user };
+} catch (error) {
+  return { success: false, error: error.message };
+}
+
+// ✅ Good: Use Result pattern
+const result = await findUser(id);
+if (!result.success) {
+  return resultToApiResponse(result);
+}
+return resultToApiResponse(result);
+```
+
+### 2. Don't Skip Response Schema Validation
+
+```typescript
+// ❌ Bad: No response validation
+.post("/", handler)
+
+// ✅ Good: Define response schemas
+.post("/", handler, {
+  response: {
+    200: ResponseSchema,
+    400: ErrorSchema,
+  },
+})
+```
+
+### 3. Don't Duplicate Plugin Logic
+
+```typescript
+// ❌ Bad: Duplicate auth logic
+.post("/route1", async ({ headers }) => {
+  const session = await auth.api.getSession({ headers });
+  if (!session) return { error: "Unauthorized" };
+  // ...
+})
+
+.post("/route2", async ({ headers }) => {
+  const session = await auth.api.getSession({ headers });
+  if (!session) return { error: "Unauthorized" };
+  // ...
+})
+
+// ✅ Good: Use auth plugin
+.post("/route1", handler, { auth: true })
+.post("/route2", handler, { auth: true })
+```
+
+### 4. Don't Use Any Types
+
+```typescript
+// ❌ Bad: Using any types
+.post("/", async ({ body }: { body: any }) => {
+  // No type safety
+})
+
+// ✅ Good: Define proper types
+.post("/", async ({ body }: { body: RequestType }) => {
+  // Type-safe access
+})
+```
+
+## Performance Considerations
+
+### 1. Use Streaming for Large Responses
+
+```typescript
+// ✅ Good: Streaming for large data
+.post("/stream", async ({ body }) => {
+  const stream = await service.createStream(body);
+  return new Response(stream, {
+    headers: { "Content-Type": "text/event-stream" },
+  });
+})
+```
+
+### 2. Implement Proper Caching
+
+```typescript
+// ✅ Good: Use caching headers
+.get("/data", async ({ set }) => {
+  set.headers["Cache-Control"] = "public, max-age=300";
+  return { data: cachedData };
+})
+```
+
+### 3. Use Database Connection Pooling
+
+```typescript
+// ✅ Good: Reuse database connections
+export const databasePlugin = new Elysia({ name: "database" }).decorate(
+  "db",
+  db
+);
+```
+
+## Testing Patterns
+
+### 1. Test Route Handlers
+
+```typescript
+// Test individual route handlers
+describe("Chat Router", () => {
+  it("should process chat request", async () => {
+    const app = new Elysia().use(chatRouter);
+    const response = await app.handle(
+      new Request("http://localhost/api/chat", {
+        method: "POST",
+        body: JSON.stringify({ message: "Hello" }),
+      })
+    );
+
+    expect(response.status).toBe(200);
+  });
+});
+```
+
+### 2. Test Error Cases
+
+```typescript
+// Test error handling
+it("should return 401 for unauthorized request", async () => {
+  const app = new Elysia().use(chatRouter);
+  const response = await app.handle(
+    new Request("http://localhost/api/chat", {
+      method: "POST",
+      body: JSON.stringify({ message: "Hello" }),
+    })
+  );
+
+  expect(response.status).toBe(401);
+});
+```
+
+## Current Project Implementation
+
+### Project-Specific Patterns
+
+The template-mono project implements these specific patterns:
+
+#### 1. Plugin Architecture
+```typescript
+// Current server setup in apps/server/src/index.ts
+const app = new Elysia()
+  .use(loggerIntegration)      // Logging
+  .use(openapiIntegration)     // API docs
+  .use(errorInterceptor)       // Error handling
+  .use(corsMiddleware)         // CORS
+  .all("/api/auth/*", authHandler)  // Better-Auth integration
+  .use(routers)               // API routes
+  .listen(Number.parseInt(process.env.PORT || "3001", 10));
+```
+
+#### 2. Health Check Implementation
+```typescript
+// apps/server/src/routers/health/health.router.ts
+const healthRouter = new Elysia({ prefix: "/health" }).get("/", ({ set }) => {
+  const startTime = Date.now();
+  const responseTime = Date.now() - startTime;
+
+  set.status = StatusCodes.OK;
+
+  return Response.ok({
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    version: "1.0.0",
+    responseTime,
+    status: "healthy",
+  });
+});
+```
+
+#### 3. Better-Auth Integration
+```typescript
+// Authentication handler for all /api/auth/* routes
+.all("/api/auth/*", ({ request, set }) => {
+  if (["POST", "GET"].includes(request.method)) {
+    return auth.handler(request);
+  }
+  set.status = StatusCodes.METHOD_NOT_ALLOWED;
+  return { error: "Method not allowed" };
+})
+```
+
+#### 4. Type-Safe Router Exports
+```typescript
+// Export types for frontend consumption
+export type App = typeof app;
+export type Routers = typeof routers;
+```
+
+### Development Workflow
+
+1. **Start Development**: `bun dev` (both frontend and backend)
+2. **Database Operations**: `bun db:push`, `bun db:studio`
+3. **Code Quality**: `bun check`, `bun check-types`
+4. **Build**: `bun build`
+
+### Key Features Implemented
+
+- **Health Monitoring**: Real-time system status with TanStack Query
+- **Authentication**: Complete sign-in/sign-up flow with Better-Auth
+- **Type Safety**: End-to-end TypeScript with strict mode
+- **Error Handling**: Comprehensive Result pattern implementation
+- **API Documentation**: OpenAPI integration for API docs
+- **Database Management**: Drizzle ORM with SQLite for development
+
+This pattern guide ensures consistent, type-safe, and maintainable Elysia.js applications following the project's architectural principles.
