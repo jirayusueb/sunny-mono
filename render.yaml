@@ -3,8 +3,8 @@ services:
   - type: web
     name: sunny-mono-server
     runtime: docker
-    plan: starter
-    region: oregon
+    plan: free
+    region: singapore
     dockerfilePath: ./apps/server/Dockerfile
     dockerContext: .
     envVars:
@@ -29,8 +29,8 @@ services:
   - type: web
     name: sunny-mono-web
     runtime: docker
-    plan: starter
-    region: oregon
+    plan: free
+    region: singapore
     dockerfilePath: ./apps/web/Dockerfile
     dockerContext: .
     envVars:
