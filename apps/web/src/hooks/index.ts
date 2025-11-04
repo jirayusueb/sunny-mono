@@ -1,1 +1,1 @@
-export { default as useIsMobile } from "./use-mobile";
+export { useIsMobile } from "./use-mobile";

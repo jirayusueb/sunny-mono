@@ -1,0 +1,63 @@
+# Dependencies
+node_modules
+.pnp
+.pnp.js
+
+# Testing
+coverage
+*.log
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+
+# Production builds
+.next
+dist
+build
+.turbo
+
+# Environment files
+.env
+.env*.local
+.env.development
+.env.production
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+README.md
+docs
+*.md
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# CI/CD
+.github
+.gitlab-ci.yml
+.circleci
+
+# Misc
+*.tsbuildinfo
+.cache
+.temp
+tmp
+
+# Note: turbo prune runs inside Dockerfile, so we don't need to include out/

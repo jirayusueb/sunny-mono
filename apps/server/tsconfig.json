@@ -2,7 +2,8 @@
 	"extends": "@workspace/ts-config/server.json",
 	"compilerOptions": {
 		"paths": {
-			"@workspace/shared": ["../packages/shared/src/*"]
+			"@workspace/shared": ["../../packages/shared/src/*"],
+			"@workspace/server": ["../server/src/*"]
 		}
 	}
 }

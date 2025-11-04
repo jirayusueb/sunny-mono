@@ -1,0 +1,31 @@
+# Dependencies
+node_modules
+
+# Testing
+coverage
+*.test.tsx
+*.test.ts
+*.spec.tsx
+*.spec.ts
+vitest.config.*
+vitest.d.ts
+test
+
+# Build outputs
+.next
+dist
+.turbo
+out
+
+# Environment files
+.env
+.env*.local
+
+# IDE
+.vscode
+.idea
+
+# Documentation
+*.md
+docs
+

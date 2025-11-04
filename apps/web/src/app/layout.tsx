@@ -5,9 +5,10 @@ import {
 	IBM_Plex_Serif,
 } from "next/font/google";
 
-import { Providers } from "@/components/providers";
 import { Toaster } from "@/components/ui/sonner";
 import "../index.css";
+
+import { Providers } from "@/components";
 
 const ibmPlexSansThai = IBM_Plex_Sans_Thai({
 	variable: "--font-sans",

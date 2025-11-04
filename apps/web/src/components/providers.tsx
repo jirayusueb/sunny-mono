@@ -6,7 +6,7 @@ import { Toaster } from "sonner";
 import ThemeProvider from "@/components/theme-provider";
 import { queryClient } from "@/lib/query-client";
 
-export function Providers({ children }: { children: React.ReactNode }) {
+export default function Providers({ children }: { children: React.ReactNode }) {
 	return (
 		<QueryClientProvider client={queryClient}>
 			<ThemeProvider
