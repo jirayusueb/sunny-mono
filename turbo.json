@@ -3,25 +3,50 @@
 	"ui": "tui",
 	"tasks": {
 		"build": {
-			"dependsOn": ["^build"],
-			"inputs": ["$TURBO_DEFAULT$", ".env*"],
-			"outputs": ["dist/**", ".next/**"]
-		},
-		"@workspace/server#build": {
-			"dependsOn": ["^build"],
-			"inputs": ["$TURBO_DEFAULT$", ".env*"],
-			"outputs": ["api/**"]
+			"dependsOn": [
+				"^build"
+			],
+			"inputs": [
+				"$TURBO_DEFAULT$",
+				".env*"
+			],
+			"outputs": [
+				"dist/**",
+				".next/**",
+				"!.next/cache/**"
+			]
 		},
 		"lint": {
-			"dependsOn": ["^lint"]
+			"dependsOn": [
+				"^lint"
+			]
+		},
+		"format": {
+			"dependsOn": [
+				"^format"
+			]
 		},
 		"check-types": {
 			"cache": false,
-			"dependsOn": ["^check-types"]
+			"dependsOn": [
+				"^check-types"
+			]
 		},
 		"test": {
-			"dependsOn": ["^build"],
-			"outputs": ["coverage/**"]
+			"dependsOn": [
+				"^build"
+			],
+			"outputs": [
+				"coverage/**"
+			]
+		},
+		"test:coverage": {
+			"dependsOn": [
+				"^build"
+			],
+			"outputs": [
+				"coverage/**"
+			]
 		},
 		"dev": {
 			"cache": false,

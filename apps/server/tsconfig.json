@@ -5,5 +5,7 @@
 			"@workspace/shared": ["../../packages/shared/src/*"],
 			"@workspace/server": ["../server/src/*"]
 		}
-	}
+	},
+	"include": ["src/**/*.ts", "src/**/*.tsx"],
+	"exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"]
 }

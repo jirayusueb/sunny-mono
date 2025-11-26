@@ -9,12 +9,25 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3001
-      - DATABASE_URL=./local.db
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/sunny_mono
       - BETTER_AUTH_SECRET=secret
       - CORS_ORIGIN=http://localhost:3000
       - SKIP_ENV_VALIDATION=true
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:18-alpine
+    container_name: sunny-mono-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: sunny_mono
+    ports:
+      - "5434:5432"
     volumes:
-      - ./apps/server/local.db:/app/local.db
+      - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
 
   web:
@@ -32,3 +45,6 @@ services:
     depends_on:
       - server
     restart: unless-stopped
+
+volumes:
+  postgres_data:

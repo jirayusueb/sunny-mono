@@ -1,6 +1,5 @@
 import { Elysia } from "elysia";
 
-import { env } from "./env";
 import { routers } from "./routers";
 import { StatusCodes } from "./shared/const";
 import { loggerIntegration, openapiIntegration } from "./shared/integrations";
